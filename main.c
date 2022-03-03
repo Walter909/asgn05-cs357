@@ -13,9 +13,9 @@
 #include "talk.h"
 #include "mytalk.h"
 
-/*TODO: Usage: mytalk [-v] [-a] [-N] [hostname] port*/
+/*Usage: mytalk [-v] [-a] [-N] [hostname] port*/
 int main(int argc, char *argv[]) {
-
+    
     int opt;
     int sockfd;
     int port_num;
@@ -39,19 +39,16 @@ int main(int argc, char *argv[]) {
         if(opt == 'v'){
                 /*Set Verbosity*/
                 verbose = 1;
-                printf("v\n");
         }                
         
         if(opt == 'a'){
                 /*Server accept connection without asking*/
                 ask = 1;
-                printf("a\n");
         }
         
         if(opt == 'N'){
                 /*Ncurses windows*/
                 ncurse = 1;
-                printf("n\n");
         }
     }
 

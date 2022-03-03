@@ -6,7 +6,9 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <poll.h>
+#include <errno.h>
 #include "talk.h"
+#include "mytalk.h"
 
 #define MAXLINE 90
 #define KEYBOARD 0
@@ -56,16 +58,22 @@ void client_chat(int sockfd, int port, char *hostname, struct sockaddr_in sa, in
             set_verbosity(1);    
         }
    }
+    /*Register signal*/
+    setup_signal();
+
     /*poll socket and keyboard input*/
-    while(!has_hit_eof()){
-        if(poll(fds,TOTAL_FD,-1) == -1){
+    while(!has_hit_eof() && signal_stop != 1){
+        if(poll(fds,TOTAL_FD,-1) == -1 && errno != EINTR){
             perror("poll");
             exit(EXIT_FAILURE);
         }
         
         /*check if server hungup handling*/        
         if(fds[SOCKET].revents & POLLHUP){
-           write_to_output(closemsg,strlen(closemsg));
+           if(write_to_output(closemsg,strlen(closemsg)) == ERR && errno != EINTR){
+              perror("write_to_output");
+              exit(EXIT_FAILURE);     
+           }
            pause();
            break; 
         }
@@ -76,17 +84,20 @@ void client_chat(int sockfd, int port, char *hostname, struct sockaddr_in sa, in
 
             if(has_whole_line()){
                 /*Read is blocking  so only read when internal buffer is full*/
-                if((bytes_read = read_from_input(buff,MAXLINE)) == -1){
+                if((bytes_read = read_from_input(buff,MAXLINE)) == ERR  && errno != EINTR){
                     perror("read");
                     exit(EXIT_FAILURE);
                 }
                 /*In verbose write bytes read*/
                 if(verbose == 1){
                     snprintf(vmsg,MAXLINE + 1,"debug: bytes read from stdin %d\n",bytes_read);
-                    write_to_output(vmsg,strlen(vmsg));
+                    if(write_to_output(vmsg,strlen(vmsg)) == ERR && errno == EINTR){
+                      perror("write_to_output");
+                      exit(EXIT_FAILURE);
+                    }
                 }
 
-                if(send(sockfd,buff, bytes_read,0) ==-1){
+                if(send(sockfd,buff, bytes_read,0) == -1  && errno != EINTR){
                     perror("send");
                     exit(EXIT_FAILURE);
                 }
@@ -94,26 +105,33 @@ void client_chat(int sockfd, int port, char *hostname, struct sockaddr_in sa, in
         }
         /*Trying to receive something*/
         if(fds[SOCKET].revents & POLLIN){
-            if((recv_len = recv(sockfd,buff,MAXLINE,0)) == -1){
+            if((recv_len = recv(sockfd,buff,MAXLINE,0)) == -1 && errno != EINTR){
                 perror("receive");
                 exit(EXIT_FAILURE);
             }
              /*If the client shutsdown*/
             if(recv_len == 0){
-                write_to_output(closemsg,strlen(closemsg));
+                if(write_to_output(closemsg,strlen(closemsg)) == ERR && errno != EINTR){
+                   perror("write_to_output");
+                   exit(EXIT_FAILURE);
+                }
                 pause();
                 break;
             }
             /*In verbose write received from server*/
             if(verbose == 1){
                 snprintf(vmsg,MAXLINE + 1,"debug: bytes received from server %d\n",recv_len);
-                write_to_output(vmsg,strlen(vmsg));
+                if(write_to_output(vmsg,strlen(vmsg)) == ERR && errno != EINTR){
+                  perror("write_to_output");
+                  exit(EXIT_FAILURE);
+                }
             }
  
-            write_to_output(buff,recv_len);
+            if(write_to_output(buff,recv_len) == ERR && errno != EINTR){
+                perror("write_to_output");
+                exit(EXIT_FAILURE);
+            }
         }
-
-   
     }
     stop_windowing();
 }

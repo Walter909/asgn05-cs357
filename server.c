@@ -8,6 +8,8 @@
 #include <poll.h>
 #include <netdb.h>
 #include <pwd.h>
+#include <errno.h>
+#include "mytalk.h"
 #include "talk.h"
 
 #define MAXLINE 90
@@ -91,20 +93,22 @@ void server_chat(int sockfd, int port, const struct sockaddr_in sa, int verbose,
             set_verbosity(1);
         }
     }
+    /*Register signal*/
+    setup_signal(); 
     
-
-    /*TODO:add some verbose mode stuff is upto me maybe I
-     * change the format of strings using inet_top*/
-        
     /*poll socket and keyboard input*/
-    while(!has_hit_eof()){
-        if(poll(fds,TOTAL_FD,-1) == -1){
+    while(!has_hit_eof() && signal_stop != 1){
+      
+        if(poll(fds,TOTAL_FD,-1) == -1 && errno != EINTR){
             perror("poll");
             exit(EXIT_FAILURE);
         }
         /*Check if socketfd is hungup by client*/
         if(fds[SOCKET].revents & POLLHUP){
-             write_to_output(closemsg,strlen(closemsg));
+             if(write_to_output(closemsg,strlen(closemsg)) == ERR && errno != EINTR){
+               perror("write_to_output");
+               exit(EXIT_FAILURE);
+             }
              pause();
              break;
         }
@@ -115,7 +119,7 @@ void server_chat(int sockfd, int port, const struct sockaddr_in sa, int verbose,
             
             if(has_whole_line()){
             /*Read is blocking so only read when internal buffer is full*/
-                if((bytes_read = read_from_input(buff,MAXLINE)) == -1){
+                if((bytes_read = read_from_input(buff,MAXLINE)) == ERR  && errno != EINTR){
                     perror("read");
                     exit(EXIT_FAILURE);
                 }
@@ -123,10 +127,13 @@ void server_chat(int sockfd, int port, const struct sockaddr_in sa, int verbose,
                 /*In verbose write bytes_read*/
                 if(verbose == 1){
                     snprintf(vmsg,MAXLINE + 1,"debug: bytes read from stdin %d\n",bytes_read);
-                    write_to_output(vmsg,strlen(vmsg));
+                    if(write_to_output(vmsg,strlen(vmsg)) == ERR && errno != EINTR){
+                        perror("write_to_output");
+                        exit(EXIT_FAILURE);
+                    }
                 }
 
-                if(send(newsock,buff, bytes_read,0) ==-1){
+                if(send(newsock,buff, bytes_read,0) == -1 && errno != EINTR){
                     perror("send");
                     exit(EXIT_FAILURE);
                 }
@@ -135,23 +142,32 @@ void server_chat(int sockfd, int port, const struct sockaddr_in sa, int verbose,
 
         /*Trying to receive something*/
         if(fds[SOCKET].revents & POLLIN){
-            if((recv_len = recv(newsock,buff, MAXLINE,0)) == -1){
+            if((recv_len = recv(newsock,buff, MAXLINE,0)) == -1 && errno != EINTR){
                 perror("receive");
                 exit(EXIT_FAILURE);
             }
             /*If the client shutsdown*/
             if(recv_len == 0){
-                write_to_output(closemsg,strlen(closemsg));
+                if(write_to_output(closemsg,strlen(closemsg)) == ERR && errno != EINTR){
+                    perror("write_to_output");
+                    exit(EXIT_FAILURE);
+                }
                 pause();
                 break; 
             }
             /*In verbose write received from client*/
             if(verbose == 1){
                 snprintf(vmsg,MAXLINE + 1,"debug: bytes received from client %d\n",recv_len);
-                write_to_output(vmsg,strlen(vmsg));
+               if(write_to_output(vmsg,strlen(vmsg)) == ERR && errno != EINTR){
+                    perror("write_to_output");
+                    exit(EXIT_FAILURE);
+                }
             }
 
-            write_to_output(buff,recv_len);
+            if(write_to_output(buff,recv_len) == ERR  && errno != EINTR){
+                perror("write_to_output");
+                exit(EXIT_FAILURE);
+            }
         }
     }
     
