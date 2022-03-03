@@ -25,7 +25,9 @@ int main(int argc, char *argv[]) {
     struct hostent *hostent;
     char *hostname = NULL;
     char *end = NULL;
-
+    int verbose = 0;
+    int ask = 0;
+    int ncurse = 0;
     /*Error handling*/
     if (argc < 2) {
         perror("Usage: mytalk [-v] [-a] [-N] [hostname] port");
@@ -34,20 +36,22 @@ int main(int argc, char *argv[]) {
 
     while ((opt = getopt(argc, argv, ":vaN")) != -1) {
 
-        switch (opt) {
-            case 'v':
-                /*Verbosity*/
+        if(opt == 'v'){
+                /*Set Verbosity*/
+                verbose = 1;
                 printf("v\n");
-                break;
-            case 'a':
+        }                
+        
+        if(opt == 'a'){
                 /*Server accept connection without asking*/
+                ask = 1;
                 printf("a\n");
-                break;
-            case 'N':
-                /*Ncurses*/
-                printf("N\n");
-                break;
-
+        }
+        
+        if(opt == 'N'){
+                /*Ncurses windows*/
+                ncurse = 1;
+                printf("n\n");
         }
     }
 
@@ -94,12 +98,12 @@ int main(int argc, char *argv[]) {
 
         /*Make cast to internet address which is a char* but void* behavior*/
         sa.sin_addr.s_addr = *(uint32_t *) hostent->h_addr_list[0];
-        client_chat(sockfd,port_num,hostname,sa);
+        client_chat(sockfd,port_num,hostname,sa,verbose,ncurse);
     } else {
         /*Server*/
         /*allow connections from all valid addresses*/
         sa.sin_addr.s_addr = htonl(INADDR_ANY);
-        server_chat(sockfd, port_num, sa);
+        server_chat(sockfd, port_num, sa, verbose,ask,ncurse);
     }
 
     close(sockfd);
